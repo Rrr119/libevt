@@ -408,6 +408,15 @@ kernel32.dll, which is expanded to:
 The service did not respond to the start or control request in a timely fashion.
 ....
 
+Message strings can also contain typed parameter specifications such as
+`%1!d!`, `%2!u!`, `%3!08x!` or `%4!.3s!`. The implementation uses the
+specification to format the corresponding event string, and preserves the raw
+value if a specification cannot be applied.
+
+Event message resources can contain message strings for multiple languages.
+The preferred language is matched by language identifier, then by primary
+language, with neutral language and the first available language as fallbacks.
+
 [NOTE]
 Note that in the Windows XML Event Log (EVTX) format a string can contain
 multiple parameter placeholders. It has not yet been observed for the Windows

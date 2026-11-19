@@ -36,6 +36,7 @@
 #include "message_handle.h"
 #include "message_string.h"
 #include "resource_file.h"
+#include "value_format.h"
 
 #define EXPORT_HANDLE_NOTIFY_STREAM		stdout
 
@@ -1538,7 +1539,7 @@ int export_handle_export_record_event_message(
 		if( export_handle_print_message(
 		     export_handle,
 		     parameter_filename,
-		     parameter_filename_size - 1,
+		     parameter_filename != NULL ? parameter_filename_size - 1 : 0,
 		     message_string,
 		     record,
 		     error ) != 1 )
@@ -1591,6 +1592,7 @@ int export_handle_export_record(
 	system_character_t *source_name       = NULL;
 	system_character_t *value_string      = NULL;
 	static char *function                 = "export_handle_export_record";
+	size_t source_name_length             = 0;
 	size_t source_name_size               = 0;
 	size_t value_string_size              = 0;
 	uint32_t event_identifier             = 0;
@@ -1920,12 +1922,14 @@ int export_handle_export_record(
 		 export_handle->notify_stream,
 		 "Source name\t\t\t: %" PRIs_SYSTEM "\n",
 		 source_name );
+
+		source_name_length = source_name_size - 1;
 	}
 	if( export_handle_export_record_event_category(
 	     export_handle,
 	     record,
 	     source_name,
-	     source_name_size - 1,
+	     source_name_length,
 	     log_handle,
 	     error ) != 1 )
 	{
@@ -1962,7 +1966,7 @@ int export_handle_export_record(
 	     export_handle,
 	     record,
 	     source_name,
-	     source_name_size - 1,
+	     source_name_length,
 	     event_identifier,
 	     log_handle,
 	     error ) != 1 )
@@ -2014,17 +2018,24 @@ int export_handle_print_message(
      libevt_record_t *record,
      libcerror_error_t **error )
 {
-	system_character_t *string        = NULL;
-	system_character_t *value_string  = NULL;
-	static char *function             = "export_handle_print_message";
-	size_t specifier_length           = 0;
-	size_t string_length              = 0;
-	size_t string_index               = 0;
-	size_t value_string_size          = 0;
-	system_character_t last_character = 0;
-	int number_of_strings             = 0;
-	int result                        = 0;
-	int value_string_index            = 0;
+	system_character_t *formatted_value_string = NULL;
+	system_character_t *string                 = NULL;
+	system_character_t *value_string           = NULL;
+	message_string_t *parameter_string         = NULL;
+	static char *function                      = "export_handle_print_message";
+	size_t formatted_value_string_size         = 0;
+	size_t format_string_start                 = 0;
+	size_t format_string_length                = 0;
+	size_t specifier_end                       = 0;
+	size_t string_length                       = 0;
+	size_t string_index                        = 0;
+	size_t value_string_size                   = 0;
+	system_character_t last_character          = 0;
+	uint32_t parameter_identifier              = 0;
+	int number_of_strings                      = 0;
+	int result                                 = 0;
+	int terminate_without_newline              = 0;
+	int value_string_index                     = 0;
 
 	if( export_handle == NULL )
 	{
@@ -2044,6 +2055,39 @@ int export_handle_print_message(
 		 LIBCERROR_ERROR_DOMAIN_ARGUMENTS,
 		 LIBCERROR_ARGUMENT_ERROR_INVALID_VALUE,
 		 "%s: invalid message string.",
+		 function );
+
+		return( -1 );
+	}
+	if( message_string->string == NULL )
+	{
+		libcerror_error_set(
+		 error,
+		 LIBCERROR_ERROR_DOMAIN_ARGUMENTS,
+		 LIBCERROR_ARGUMENT_ERROR_INVALID_VALUE,
+		 "%s: invalid message string - missing string.",
+		 function );
+
+		return( -1 );
+	}
+	if( message_string->string_size == 0 )
+	{
+		libcerror_error_set(
+		 error,
+		 LIBCERROR_ERROR_DOMAIN_ARGUMENTS,
+		 LIBCERROR_ARGUMENT_ERROR_VALUE_ZERO_OR_LESS,
+		 "%s: invalid message string - string size is zero.",
+		 function );
+
+		return( -1 );
+	}
+	if( record == NULL )
+	{
+		libcerror_error_set(
+		 error,
+		 LIBCERROR_ERROR_DOMAIN_ARGUMENTS,
+		 LIBCERROR_ARGUMENT_ERROR_INVALID_VALUE,
+		 "%s: invalid record.",
 		 function );
 
 		return( -1 );
@@ -2129,16 +2173,99 @@ int export_handle_print_message(
 		if( ( ( string_length - string_index ) >= 2 )
 		 && ( string[ string_index ] == (system_character_t) '%' ) )
 		{
-			/* Replace:
-			 *  %% = %
-			 */
 			if( string[ string_index + 1 ] == (system_character_t) '%' )
 			{
-				last_character = string[ string_index + 1 ];
+				specifier_end = string_index + 2;
+
+				if( ( specifier_end < string_length )
+				 && ( string[ specifier_end ] >= (system_character_t) '0' )
+				 && ( string[ specifier_end ] <= (system_character_t) '9' ) )
+				{
+					parameter_identifier = 0;
+
+					while( ( specifier_end < string_length )
+					    && ( string[ specifier_end ] >= (system_character_t) '0' )
+					    && ( string[ specifier_end ] <= (system_character_t) '9' ) )
+					{
+						if( parameter_identifier > ( ( UINT32_MAX - (uint32_t) ( string[ specifier_end ] - (system_character_t) '0' ) ) / 10 ) )
+						{
+							break;
+						}
+						parameter_identifier = ( parameter_identifier * 10 )
+						                     + (uint32_t) ( string[ specifier_end ] - (system_character_t) '0' );
+
+						specifier_end++;
+					}
+					if( ( specifier_end < string_length )
+					 && ( string[ specifier_end ] >= (system_character_t) '0' )
+					 && ( string[ specifier_end ] <= (system_character_t) '9' ) )
+					{
+						/* The parameter identifier does not fit in 32-bit. */
+					}
+					else if( ( parameter_filename != NULL )
+					      && ( parameter_filename_length > 0 ) )
+					{
+						result = message_handle_get_message_string(
+							  export_handle->message_handle,
+							  parameter_filename,
+							  parameter_filename_length,
+							  parameter_identifier,
+							  &parameter_string,
+							  error );
+
+						if( result == -1 )
+						{
+							libcerror_error_set(
+							 error,
+							 LIBCERROR_ERROR_DOMAIN_RUNTIME,
+							 LIBCERROR_RUNTIME_ERROR_GET_FAILED,
+							 "%s: unable to retrieve parameter string: 0x%08" PRIx32 " from: %" PRIs_SYSTEM ".",
+							 function,
+							 parameter_identifier,
+							 parameter_filename );
+
+							goto on_error;
+						}
+						else if( ( result != 0 )
+						      && ( parameter_string != NULL ) )
+						{
+							if( export_handle_print_value_string(
+							     export_handle,
+							     parameter_filename,
+							     parameter_filename_length,
+							     parameter_string->string,
+							     parameter_string->string_size - 1,
+							     &last_character,
+							     error ) != 1 )
+							{
+								libcerror_error_set(
+								 error,
+								 LIBCERROR_ERROR_DOMAIN_RUNTIME,
+								 LIBCERROR_RUNTIME_ERROR_PRINT_FAILED,
+								 "%s: unable to print parameter string.",
+								 function );
+
+								goto on_error;
+							}
+							string_index = specifier_end;
+
+							continue;
+						}
+					}
+					while( string_index < specifier_end )
+					{
+						fprintf(
+						 export_handle->notify_stream,
+						 "%" PRIc_SYSTEM,
+						 string[ string_index++ ] );
+					}
+					continue;
+				}
+				last_character = (system_character_t) '%';
 
 				fprintf(
 				 export_handle->notify_stream,
-				 "%c",
+				 "%" PRIc_SYSTEM,
 				 last_character );
 
 				string_index += 2;
@@ -2147,56 +2274,86 @@ int export_handle_print_message(
 			}
 			if( string[ string_index + 1 ] == (system_character_t) '0' )
 			{
+				terminate_without_newline = 1;
+				string_index             += 2;
+
 				break;
 			}
 			if( ( string[ string_index + 1 ] < (system_character_t) '1' )
 			 || ( string[ string_index + 1 ] > (system_character_t) '9' ) )
 			{
-				libcerror_error_set(
-				 error,
-				 LIBCERROR_ERROR_DOMAIN_RUNTIME,
-				 LIBCERROR_RUNTIME_ERROR_UNSUPPORTED_VALUE,
-				 "%s: unsupported conversion specifier: %" PRIs_SYSTEM ".",
-				 function,
-				 &( string[ string_index ] ) );
+				last_character = string[ string_index ];
 
-				goto on_error;
+				fprintf(
+				 export_handle->notify_stream,
+				 "%" PRIc_SYSTEM,
+				 last_character );
+
+				string_index++;
+
+				continue;
 			}
-			value_string_index = (int) string[ string_index + 1 ] - (int) '0';
+			parameter_identifier = (uint32_t) ( string[ string_index + 1 ] - (system_character_t) '0' );
+			specifier_end        = string_index + 2;
 
-			specifier_length = 2;
-
-			if( ( ( string_length - string_index ) >= 3 )
-			 && ( string[ string_index + 2 ] >= (system_character_t) '0' )
-			 && ( string[ string_index + 2 ] <= (system_character_t) '9' ) )
+			while( ( specifier_end < string_length )
+			    && ( string[ specifier_end ] >= (system_character_t) '0' )
+			    && ( string[ specifier_end ] <= (system_character_t) '9' ) )
 			{
-				value_string_index *= 10;
-				value_string_index += (int) string[ string_index + 2 ] - (int) '0';
-
-				specifier_length += 1;
-			}
-			value_string_index -= 1;
-
-			if( ( ( string_length - string_index ) > ( specifier_length + 3 ) )
-			 && ( string[ string_index + specifier_length ] == (system_character_t) '!' ) )
-			{
-				if( ( string[ string_index + specifier_length + 1 ] != (system_character_t) 's' )
-				 || ( string[ string_index + specifier_length + 2 ] != (system_character_t) '!' ) )
+				if( parameter_identifier > ( ( UINT32_MAX - (uint32_t) ( string[ specifier_end ] - (system_character_t) '0' ) ) / 10 ) )
 				{
-					libcerror_error_set(
-					 error,
-					 LIBCERROR_ERROR_DOMAIN_RUNTIME,
-					 LIBCERROR_RUNTIME_ERROR_UNSUPPORTED_VALUE,
-					 "%s: unsupported conversion specifier: %" PRIs_SYSTEM ".",
-					 function,
-					 &( string[ string_index ] ) );
+					parameter_identifier = UINT32_MAX;
 
-					goto on_error;
+					break;
 				}
-				specifier_length += 3;
+				parameter_identifier = ( parameter_identifier * 10 )
+				                     + (uint32_t) ( string[ specifier_end ] - (system_character_t) '0' );
+
+				specifier_end++;
 			}
-/* TODO remove index check after user data support */
-			if( value_string_index < number_of_strings )
+			while( ( specifier_end < string_length )
+			    && ( string[ specifier_end ] >= (system_character_t) '0' )
+			    && ( string[ specifier_end ] <= (system_character_t) '9' ) )
+			{
+				specifier_end++;
+			}
+			format_string_length = 0;
+
+			if( ( specifier_end < string_length )
+			 && ( string[ specifier_end ] == (system_character_t) '!' ) )
+			{
+				format_string_start = specifier_end + 1;
+
+				specifier_end++;
+
+				while( ( specifier_end < string_length )
+				    && ( string[ specifier_end ] != (system_character_t) '!' ) )
+				{
+					specifier_end++;
+				}
+				if( specifier_end < string_length )
+				{
+					format_string_length = specifier_end - format_string_start;
+
+					specifier_end++;
+				}
+				else
+				{
+					specifier_end = string_index + 2;
+
+					while( ( specifier_end < string_length )
+					    && ( string[ specifier_end ] >= (system_character_t) '0' )
+					    && ( string[ specifier_end ] <= (system_character_t) '9' ) )
+					{
+						specifier_end++;
+					}
+				}
+			}
+			value_string_index = (int) parameter_identifier - 1;
+
+			if( ( parameter_identifier > 0 )
+			 && ( value_string_index >= 0 )
+			 && ( value_string_index < number_of_strings ) )
 			{
 #if defined( HAVE_WIDE_SYSTEM_CHARACTER )
 				result = libevt_record_get_utf16_string_size(
@@ -2266,12 +2423,43 @@ int export_handle_print_message(
 
 						goto on_error;
 					}
+					if( format_string_length > 0 )
+					{
+						result = evttools_value_format_allocate(
+							  &( string[ format_string_start ] ),
+							  format_string_length,
+							  value_string,
+							  value_string_size - 1,
+							  &formatted_value_string,
+							  &formatted_value_string_size,
+							  error );
+
+						if( result != 1 )
+						{
+							libcerror_error_set(
+							 error,
+							 LIBCERROR_ERROR_DOMAIN_RUNTIME,
+							 LIBCERROR_RUNTIME_ERROR_GENERIC,
+							 "%s: unable to format string: %d.",
+							 function,
+							 value_string_index );
+
+							goto on_error;
+						}
+					}
+					else
+					{
+						formatted_value_string      = value_string;
+						formatted_value_string_size = value_string_size;
+
+						value_string = NULL;
+					}
 					if( export_handle_print_value_string(
 					     export_handle,
 					     parameter_filename,
 					     parameter_filename_length,
-					     value_string,
-					     value_string_size - 1,
+					     formatted_value_string,
+					     formatted_value_string_size - 1,
 					     &last_character,
 					     error ) != 1 )
 					{
@@ -2286,32 +2474,45 @@ int export_handle_print_message(
 						goto on_error;
 					}
 					memory_free(
-					 value_string );
+					 formatted_value_string );
 
-					value_string = NULL;
+					formatted_value_string = NULL;
 				}
-				string_index += specifier_length;
+				string_index = specifier_end;
 			}
 			else
 			{
-				do
+				while( string_index < specifier_end )
 				{
 					fprintf(
 					 export_handle->notify_stream,
 					 "%" PRIc_SYSTEM "",
 					 string[ string_index++ ] );
-
-					specifier_length--;
 				}
-				while( specifier_length > 0 );
-
-				last_character = string[ string_index ];
+				if( string_index > 0 )
+				{
+					last_character = string[ string_index - 1 ];
+				}
 			}
 		}
+		else if( string_index < string_length )
+		{
+			last_character = string[ string_index ];
+
+			fprintf(
+			 export_handle->notify_stream,
+			 "%" PRIc_SYSTEM,
+			 last_character );
+
+			string_index++;
+		}
 	}
-	fprintf(
-	 export_handle->notify_stream,
-	 "\n" );
+	if( terminate_without_newline == 0 )
+	{
+		fprintf(
+		 export_handle->notify_stream,
+		 "\n" );
+	}
 
 	memory_free(
 	 string );
@@ -2319,6 +2520,11 @@ int export_handle_print_message(
 	return( 1 );
 
 on_error:
+	if( formatted_value_string != NULL )
+	{
+		memory_free(
+		 formatted_value_string );
+	}
 	if( value_string != NULL )
 	{
 		memory_free(
@@ -2354,6 +2560,17 @@ int export_handle_print_message_string(
 		 LIBCERROR_ERROR_DOMAIN_ARGUMENTS,
 		 LIBCERROR_ARGUMENT_ERROR_INVALID_VALUE,
 		 "%s: invalid export handle.",
+		 function );
+
+		return( -1 );
+	}
+	if( string_length > (size_t) SSIZE_MAX )
+	{
+		libcerror_error_set(
+		 error,
+		 LIBCERROR_ERROR_DOMAIN_ARGUMENTS,
+		 LIBCERROR_ARGUMENT_ERROR_VALUE_EXCEEDS_MAXIMUM,
+		 "%s: invalid string length value exceeds maximum.",
 		 function );
 
 		return( -1 );
@@ -2424,7 +2641,7 @@ int export_handle_print_message_string(
 
 				fprintf(
 				 export_handle->notify_stream,
-				 "%c",
+				 "%" PRIc_SYSTEM,
 				 safe_last_character );
 
 				safe_string_index += 2;
@@ -2438,7 +2655,7 @@ int export_handle_print_message_string(
 
 				fprintf(
 				 export_handle->notify_stream,
-				 "%c",
+				 "%" PRIc_SYSTEM,
 				 safe_last_character );
 
 				safe_string_index += 2;
@@ -2454,7 +2671,7 @@ int export_handle_print_message_string(
 
 					fprintf(
 					 export_handle->notify_stream,
-					 "%c",
+					 "%" PRIc_SYSTEM,
 					 safe_last_character );
 				}
 				safe_string_index += 2;
@@ -2468,7 +2685,7 @@ int export_handle_print_message_string(
 
 				fprintf(
 				 export_handle->notify_stream,
-				 "%c",
+				 "%" PRIc_SYSTEM,
 				 safe_last_character );
 
 				safe_string_index += 2;
@@ -2507,24 +2724,22 @@ int export_handle_print_message_string(
  * Note that a value string can contain one or more parameter specifiers
  * Returns 1 if successful or -1 on error
  */
-int export_handle_print_value_string(
-     export_handle_t *export_handle,
-     const system_character_t *parameter_filename,
-     size_t parameter_filename_length,
-     system_character_t *string,
-     size_t string_length,
-     system_character_t *last_character,
-     libcerror_error_t **error )
+static int export_handle_print_value_string_internal(
+            export_handle_t *export_handle,
+            const system_character_t *parameter_filename,
+            size_t parameter_filename_length,
+            system_character_t *string,
+            size_t string_length,
+            system_character_t *last_character,
+            int recursion_depth,
+            libcerror_error_t **error )
 {
 	message_string_t *parameter_string     = NULL;
-	static char *function                  = "export_handle_print_value_string";
+	static char *function                  = "export_handle_print_value_string_internal";
 	system_character_t safe_last_character = 0;
-	size_t parameter_string_index          = 0;
-	size_t specifier_index                 = 0;
+	size_t specifier_end                   = 0;
 	size_t string_index                    = 0;
-	size_t specifier_length                = 0;
-	uint64_t character_value               = 0;
-	uint64_t parameter_identifier          = 0;
+	uint32_t parameter_identifier          = 0;
 	int result                             = 0;
 
 	if( export_handle == NULL )
@@ -2534,6 +2749,17 @@ int export_handle_print_value_string(
 		 LIBCERROR_ERROR_DOMAIN_ARGUMENTS,
 		 LIBCERROR_ARGUMENT_ERROR_INVALID_VALUE,
 		 "%s: invalid export handle.",
+		 function );
+
+		return( -1 );
+	}
+	if( string_length > (size_t) SSIZE_MAX )
+	{
+		libcerror_error_set(
+		 error,
+		 LIBCERROR_ERROR_DOMAIN_ARGUMENTS,
+		 LIBCERROR_ARGUMENT_ERROR_VALUE_EXCEEDS_MAXIMUM,
+		 "%s: invalid string length value exceeds maximum.",
 		 function );
 
 		return( -1 );
@@ -2562,6 +2788,23 @@ int export_handle_print_value_string(
 	}
 	safe_last_character = *last_character;
 
+	if( recursion_depth > 16 )
+	{
+		while( string_index < string_length )
+		{
+			fprintf(
+			 export_handle->notify_stream,
+			 "%" PRIc_SYSTEM,
+			 string[ string_index++ ] );
+		}
+		if( string_length > 0 )
+		{
+			safe_last_character = string[ string_length - 1 ];
+		}
+		*last_character = safe_last_character;
+
+		return( 1 );
+	}
 	while( string_index < string_length )
 	{
 		if( export_handle_print_message_string(
@@ -2581,147 +2824,153 @@ int export_handle_print_value_string(
 
 			return( -1 );
 		}
+		if( ( string_index >= string_length )
+		 || ( string[ string_index ] != (system_character_t) '%' ) )
+		{
+			break;
+		}
 		if( ( ( string_length - string_index ) >= 2 )
-		 && ( string[ string_index ] == (system_character_t) '%' )
 		 && ( string[ string_index + 1 ] == (system_character_t) '0' ) )
 		{
 			break;
 		}
-		if( ( ( string_length - string_index ) >= 3 )
-		 && ( string[ string_index ] == (system_character_t) '%' )
+		if( ( ( string_length - string_index ) >= 2 )
 		 && ( string[ string_index + 1 ] == (system_character_t) '%' ) )
 		{
-			if( ( string[ string_index + 2 ] < (system_character_t) '0' )
-			 || ( string[ string_index + 2 ] > (system_character_t) '9' ) )
+			specifier_end = string_index + 2;
+
+			if( ( specifier_end < string_length )
+			 && ( string[ specifier_end ] >= (system_character_t) '0' )
+			 && ( string[ specifier_end ] <= (system_character_t) '9' ) )
 			{
-				/* Replace:
-				 *  %% = %
-				 */
-				safe_last_character = string[ string_index + 1 ];
+				parameter_identifier = 0;
 
-				fprintf(
-				 export_handle->notify_stream,
-				 "%c",
-				 safe_last_character );
-
-				string_index += 2;
-
-				continue;
-			}
-			parameter_identifier = (uint64_t) ( string[ string_index + 2 ] - '0' );
-
-			specifier_index  = string_index + 3;
-			specifier_length = 3;
-
-			while( specifier_index < string_length )
-			{
-				if( ( string[ specifier_index ] < (system_character_t) '0' )
-				 || ( string[ specifier_index ] > (system_character_t) '9' ) )
+				while( ( specifier_end < string_length )
+				    && ( string[ specifier_end ] >= (system_character_t) '0' )
+				    && ( string[ specifier_end ] <= (system_character_t) '9' ) )
 				{
-					break;
+					if( parameter_identifier > ( ( UINT32_MAX - (uint32_t) ( string[ specifier_end ] - (system_character_t) '0' ) ) / 10 ) )
+					{
+						break;
+					}
+					parameter_identifier = ( parameter_identifier * 10 )
+					                     + (uint32_t) ( string[ specifier_end ] - (system_character_t) '0' );
+
+					specifier_end++;
 				}
-				character_value = (uint64_t) ( string[ specifier_index++ ] - '0' );
-
-				specifier_length += 1;
-
-				if( parameter_identifier > ( ( (uint64_t) UINT32_MAX - character_value ) / 10 ) )
+				if( ( specifier_end < string_length )
+				 && ( string[ specifier_end ] >= (system_character_t) '0' )
+				 && ( string[ specifier_end ] <= (system_character_t) '9' ) )
 				{
-					libcerror_error_set(
-					 error,
-					 LIBCERROR_ERROR_DOMAIN_RUNTIME,
-					 LIBCERROR_RUNTIME_ERROR_VALUE_OUT_OF_BOUNDS,
-					 "%s: invalid parameter message identifier value out of bounds.",
-					 function );
-
-					return( -1 );
+					/* The parameter identifier is not complete. */
 				}
-				parameter_identifier *= 10;
-				parameter_identifier += character_value;
-			}
-			result = message_handle_get_message_string(
-				  export_handle->message_handle,
-				  parameter_filename,
-				  parameter_filename_length,
-				  (uint32_t) parameter_identifier,
-				  &parameter_string,
-				  error );
-
-			if( result == -1 )
-			{
-				libcerror_error_set(
-				 error,
-				 LIBCERROR_ERROR_DOMAIN_RUNTIME,
-				 LIBCERROR_RUNTIME_ERROR_GET_FAILED,
-				 "%s: unable to retrieve parameter string: 0x%08x from: %" PRIs_SYSTEM ".",
-				 function,
-				 parameter_identifier,
-				 parameter_filename );
-
-				return( -1 );
-			}
-			if( result != 0 )
-			{
-				if( parameter_string == NULL )
+				else if( ( parameter_filename != NULL )
+				      && ( parameter_filename_length > 0 ) )
 				{
-					libcerror_error_set(
-					 error,
-					 LIBCERROR_ERROR_DOMAIN_RUNTIME,
-					 LIBCERROR_RUNTIME_ERROR_VALUE_MISSING,
-					 "%s: missing parameter string.",
-					 function );
+					result = message_handle_get_message_string(
+						  export_handle->message_handle,
+						  parameter_filename,
+						  parameter_filename_length,
+						  parameter_identifier,
+						  &parameter_string,
+						  error );
 
-					return( -1 );
+					if( result == -1 )
+					{
+						libcerror_error_set(
+						 error,
+						 LIBCERROR_ERROR_DOMAIN_RUNTIME,
+						 LIBCERROR_RUNTIME_ERROR_GET_FAILED,
+						 "%s: unable to retrieve parameter string: 0x%08" PRIx32 " from: %" PRIs_SYSTEM ".",
+						 function,
+						 parameter_identifier,
+						 parameter_filename );
+
+						return( -1 );
+					}
+					else if( ( result != 0 )
+					      && ( parameter_string != NULL ) )
+					{
+						if( export_handle_print_value_string_internal(
+						     export_handle,
+						     parameter_filename,
+						     parameter_filename_length,
+						     parameter_string->string,
+						     parameter_string->string_size - 1,
+						     &safe_last_character,
+						     recursion_depth + 1,
+						     error ) != 1 )
+						{
+							libcerror_error_set(
+							 error,
+							 LIBCERROR_ERROR_DOMAIN_RUNTIME,
+							 LIBCERROR_RUNTIME_ERROR_PRINT_FAILED,
+							 "%s: unable to print parameter string.",
+							 function );
+
+							return( -1 );
+						}
+						string_index = specifier_end;
+
+						continue;
+					}
 				}
-/*
-#if defined( HAVE_DEBUG_OUTPUT )
-				fprintf(
-				 export_handle->notify_stream,
-				 "[Parameter string: %" PRIu64 ": \"%" PRIs_SYSTEM "\"]\n",
-				 parameter_identifier,
-				 parameter_string->string );
-#endif
-*/
-				parameter_string_index = 0;
-
-				if( export_handle_print_message_string(
-				     export_handle,
-				     parameter_string->string,
-				     parameter_string->string_size - 1,
-				     &parameter_string_index,
-				     &safe_last_character,
-				     error ) != 1 )
-				{
-					libcerror_error_set(
-					 error,
-					 LIBCERROR_ERROR_DOMAIN_RUNTIME,
-					 LIBCERROR_RUNTIME_ERROR_PRINT_FAILED,
-					 "%s: unable to print parameter string.",
-					 function );
-
-					return( -1 );
-				}
-				string_index += specifier_length;
-			}
-			else
-			{
-				do
+				while( string_index < specifier_end )
 				{
 					fprintf(
 					 export_handle->notify_stream,
-					 "%" PRIc_SYSTEM "",
+					 "%" PRIc_SYSTEM,
 					 string[ string_index++ ] );
-
-					specifier_length--;
 				}
-				while( specifier_length > 0 );
-
-				safe_last_character = string[ string_index ];
+				if( string_index > 0 )
+				{
+					safe_last_character = string[ string_index - 1 ];
+				}
+				continue;
 			}
+			safe_last_character = (system_character_t) '%';
+
+			fprintf(
+			 export_handle->notify_stream,
+			 "%" PRIc_SYSTEM,
+			 safe_last_character );
+
+			string_index += 2;
+
+			continue;
 		}
+		safe_last_character = string[ string_index ];
+
+		fprintf(
+		 export_handle->notify_stream,
+		 "%" PRIc_SYSTEM,
+		 safe_last_character );
+
+		string_index++;
 	}
 	*last_character = safe_last_character;
 
 	return( 1 );
+}
+
+int export_handle_print_value_string(
+     export_handle_t *export_handle,
+     const system_character_t *parameter_filename,
+     size_t parameter_filename_length,
+     system_character_t *string,
+     size_t string_length,
+     system_character_t *last_character,
+     libcerror_error_t **error )
+{
+	return( export_handle_print_value_string_internal(
+	         export_handle,
+	         parameter_filename,
+	         parameter_filename_length,
+	         string,
+	         string_length,
+	         last_character,
+	         0,
+	         error ) );
 }
 
 /* Exports the records

@@ -54,13 +54,16 @@ check_PROGRAMS = \
 	evt_test_record_values \
 	evt_test_strings_array \
 	evt_test_support \
+        evt_test_tools_export_handle \
         evt_test_tools_info_handle \
+        evt_test_tools_language \
         evt_test_tools_message_handle \
         evt_test_tools_message_string \
         evt_test_tools_output \
         evt_test_tools_path_handle \
         evt_test_tools_registry_file \
         evt_test_tools_resource_file \
+        evt_test_tools_value_format \
 	evt_test_tools_signal
 
 evt_test_end_of_file_record_SOURCES = \
@@ -246,7 +249,63 @@ evt_test_tools_info_handle_LDADD = \
 	../libevt/libevt.la \
 	@LIBCERROR_LIBADD@
 
+evt_test_tools_export_handle_SOURCES = \
+	../evttools/export_handle.c ../evttools/export_handle.h \
+	../evttools/evtinput.c ../evttools/evtinput.h \
+	../evttools/evttools_getopt.c ../evttools/evttools_getopt.h \
+	../evttools/evttools_output.c ../evttools/evttools_output.h \
+	../evttools/evttools_signal.c ../evttools/evttools_signal.h \
+	../evttools/evttools_wide_string.c ../evttools/evttools_wide_string.h \
+	../evttools/language.c ../evttools/language.h \
+	../evttools/log_handle.c ../evttools/log_handle.h \
+	../evttools/message_handle.c ../evttools/message_handle.h \
+	../evttools/message_string.c ../evttools/message_string.h \
+	../evttools/path_handle.c ../evttools/path_handle.h \
+	../evttools/registry_file.c ../evttools/registry_file.h \
+	../evttools/resource_file.c ../evttools/resource_file.h \
+	../evttools/value_format.c ../evttools/value_format.h \
+	evt_test_libcerror.h \
+	evt_test_macros.h \
+	evt_test_tools_export_handle.c \
+	evt_test_unused.h
+
+evt_test_tools_export_handle_LDADD = \
+	@LIBREGF_LIBADD@ \
+	@LIBWRC_LIBADD@ \
+	@LIBEXE_LIBADD@ \
+	@LIBFWEVT_LIBADD@ \
+	@LIBFVALUE_LIBADD@ \
+	@LIBFWNT_LIBADD@ \
+	@LIBFGUID_LIBADD@ \
+	@LIBFDATETIME_LIBADD@ \
+	@LIBFDATA_LIBADD@ \
+	@LIBFCACHE_LIBADD@ \
+	@LIBBFIO_LIBADD@ \
+	@LIBCPATH_LIBADD@ \
+	@LIBCFILE_LIBADD@ \
+	@LIBCDIRECTORY_LIBADD@ \
+	@LIBUNA_LIBADD@ \
+	@LIBCSPLIT_LIBADD@ \
+	@LIBCNOTIFY_LIBADD@ \
+	@LIBCLOCALE_LIBADD@ \
+	@LIBCDATA_LIBADD@ \
+	../libevt/libevt.la \
+	@LIBCTHREADS_LIBADD@ \
+	@LIBCERROR_LIBADD@ \
+	@PTHREAD_LIBADD@
+
+evt_test_tools_language_SOURCES = \
+	../evttools/language.c ../evttools/language.h \
+	evt_test_macros.h \
+	evt_test_tools_language.c \
+	evt_test_unused.h
+
+evt_test_tools_language_LDADD = \
+	../libevt/libevt.la \
+	@LIBCERROR_LIBADD@
+
 evt_test_tools_message_handle_SOURCES = \
+	../evttools/language.c ../evttools/language.h \
 	../evttools/message_handle.c ../evttools/message_handle.h \
 	../evttools/message_string.c ../evttools/message_string.h \
 	../evttools/resource_file.c ../evttools/resource_file.h \
@@ -362,6 +421,7 @@ evt_test_tools_registry_file_LDADD = \
 	@LIBCERROR_LIBADD@
 
 evt_test_tools_resource_file_SOURCES = \
+	../evttools/language.c ../evttools/language.h \
 	../evttools/message_string.c ../evttools/message_string.h \
 	../evttools/resource_file.c ../evttools/resource_file.h \
 	evt_test_libcerror.h \
@@ -399,6 +459,17 @@ evt_test_tools_signal_SOURCES = \
 	evt_test_unused.h
 
 evt_test_tools_signal_LDADD = \
+	../libevt/libevt.la \
+	@LIBCERROR_LIBADD@
+
+evt_test_tools_value_format_SOURCES = \
+	../evttools/value_format.c ../evttools/value_format.h \
+	evt_test_libcerror.h \
+	evt_test_macros.h \
+	evt_test_tools_value_format.c \
+	evt_test_unused.h
+
+evt_test_tools_value_format_LDADD = \
 	../libevt/libevt.la \
 	@LIBCERROR_LIBADD@
 

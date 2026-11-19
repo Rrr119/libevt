@@ -35,6 +35,7 @@
 #include "evttools_libregf.h"
 #include "evttools_system_split_string.h"
 #include "evttools_wide_string.h"
+#include "language.h"
 #include "message_handle.h"
 #include "message_string.h"
 #include "path_handle.h"
@@ -3431,9 +3432,12 @@ int message_handle_get_message_string_from_resource_file(
 	system_character_t *resource_file_path     = NULL;
 	system_character_t *mui_resource_file_path = NULL;
 	resource_file_t *resource_file             = NULL;
+	const char *mui_language_tag               = NULL;
+	system_character_t mui_language_string[ 16 ];
 	static char *function                      = "message_handle_get_message_string_from_resource_file";
 	size_t resource_file_path_size             = 0;
 	size_t mui_resource_file_path_size         = 0;
+	size_t mui_language_string_length          = 0;
 	uint32_t mui_file_type                     = 0;
 	int result                                 = 0;
 
@@ -3617,18 +3621,70 @@ int message_handle_get_message_string_from_resource_file(
 				}
 				else if( result == 0 )
 				{
-/* TODO add support to determine language string */
-					/* The MUI resource file path is: %PATH%/%LANGUAGE%/%FILENAME%.mui
-					 */
-					result = message_handle_get_resource_file_path(
-						  message_handle,
-					          resource_filename,
-					          resource_filename_length,
-					          _SYSTEM_STRING( "en-US" ),
-					          5,
-						  &mui_resource_file_path,
-						  &mui_resource_file_path_size,
-						  error );
+					const char *mui_language_tags[ 2 ];
+					int mui_language_tag_index = 0;
+
+					mui_language_tag = evttools_language_get_mui_tag(
+					                    message_handle->preferred_language_identifier );
+
+					if( mui_language_tag == NULL )
+					{
+						mui_language_tag = "en-US";
+					}
+					mui_language_tags[ 0 ] = mui_language_tag;
+					mui_language_tags[ 1 ] = "en-US";
+
+					for( mui_language_tag_index = 0;
+					     mui_language_tag_index < 2;
+					     mui_language_tag_index++ )
+					{
+						mui_language_string_length = narrow_string_length(
+						                              mui_language_tags[ mui_language_tag_index ] );
+
+						if( mui_language_string_length >= 16 )
+						{
+							libcerror_error_set(
+							 error,
+							 LIBCERROR_ERROR_DOMAIN_RUNTIME,
+							 LIBCERROR_RUNTIME_ERROR_VALUE_OUT_OF_BOUNDS,
+							 "%s: unsupported MUI language string length.",
+							 function );
+
+							goto on_error;
+						}
+						for( result = 0;
+						     result < (int) mui_language_string_length;
+						     result++ )
+						{
+							mui_language_string[ result ] = (system_character_t) mui_language_tags[ mui_language_tag_index ][ result ];
+						}
+						mui_language_string[ mui_language_string_length ] = 0;
+
+						/* The MUI resource file path is: %PATH%/%LANGUAGE%/%FILENAME%.mui
+						 */
+						result = message_handle_get_resource_file_path(
+							  message_handle,
+						          resource_filename,
+						          resource_filename_length,
+						          mui_language_string,
+						          mui_language_string_length,
+							  &mui_resource_file_path,
+							  &mui_resource_file_path_size,
+							  error );
+
+						if( result != 0 )
+						{
+							break;
+						}
+						if( mui_resource_file_path != NULL )
+						{
+							memory_free(
+							 mui_resource_file_path );
+
+							mui_resource_file_path      = NULL;
+							mui_resource_file_path_size = 0;
+						}
+					}
 
 					if( result == -1 )
 					{

@@ -33,6 +33,7 @@
 #include "evttools_libfcache.h"
 #include "evttools_libfwevt.h"
 #include "evttools_libwrc.h"
+#include "language.h"
 #include "message_string.h"
 #include "resource_file.h"
 
@@ -680,6 +681,7 @@ int resource_file_get_message_table_resource(
 	libwrc_message_table_resource_t *safe_message_table_resource = NULL;
 	libwrc_resource_t *resource                                  = NULL;
 	libwrc_resource_item_t *resource_item                        = NULL;
+	libwrc_resource_item_t *selected_resource_sub_item           = NULL;
 	libwrc_resource_item_t *resource_sub_item                    = NULL;
 	uint8_t *resource_data                                       = NULL;
 	static char *function                                        = "resource_file_get_message_table_resource";
@@ -689,6 +691,8 @@ int resource_file_get_message_table_resource(
 	int number_of_resource_items                                 = 0;
 	int number_of_resource_sub_items                             = 0;
 	int resource_sub_item_index                                  = 0;
+	int best_language_match_score                                = -1;
+	int language_match_score                                     = 0;
 	int result                                                   = 0;
 
 	if( resource_file == NULL )
@@ -812,7 +816,7 @@ int resource_file_get_message_table_resource(
 
 		goto on_error;
 	}
-	preferred_language_identifier = resource_file->preferred_language_identifier & 0x000003ffUL;
+	preferred_language_identifier = resource_file->preferred_language_identifier;
 
 	for( resource_sub_item_index = 0;
 	     resource_sub_item_index < number_of_resource_sub_items;
@@ -849,26 +853,61 @@ int resource_file_get_message_table_resource(
 
 			goto on_error;
 		}
-		if( ( preferred_language_identifier == 0 )
-		 || ( preferred_language_identifier == ( resource_identifier & 0x000003ffUL ) ) )
+		if( preferred_language_identifier == 0 )
 		{
+			selected_resource_sub_item = resource_sub_item;
+			resource_sub_item          = NULL;
+
 			break;
 		}
-		if( libwrc_resource_item_free(
-		     &resource_sub_item,
-		     error ) != 1 )
-		{
-			libcerror_error_set(
-			 error,
-			 LIBCERROR_ERROR_DOMAIN_RUNTIME,
-			 LIBCERROR_RUNTIME_ERROR_FINALIZE_FAILED,
-			 "%s: unable to free resource sub item: %d.",
-			 function,
-			 resource_sub_item_index );
+		language_match_score = evttools_language_get_match_score(
+		                        preferred_language_identifier,
+		                        resource_identifier );
 
-			goto on_error;
+		if( language_match_score > best_language_match_score )
+		{
+			if( selected_resource_sub_item != NULL )
+			{
+				if( libwrc_resource_item_free(
+				     &selected_resource_sub_item,
+				     error ) != 1 )
+				{
+					libcerror_error_set(
+					 error,
+					 LIBCERROR_ERROR_DOMAIN_RUNTIME,
+					 LIBCERROR_RUNTIME_ERROR_FINALIZE_FAILED,
+					 "%s: unable to free selected resource sub item.",
+					 function );
+
+					goto on_error;
+				}
+			}
+			selected_resource_sub_item = resource_sub_item;
+			resource_sub_item          = NULL;
+
+			best_language_match_score = language_match_score;
+		}
+		if( resource_sub_item != NULL )
+		{
+			if( libwrc_resource_item_free(
+			     &resource_sub_item,
+			     error ) != 1 )
+			{
+				libcerror_error_set(
+				 error,
+				 LIBCERROR_ERROR_DOMAIN_RUNTIME,
+				 LIBCERROR_RUNTIME_ERROR_FINALIZE_FAILED,
+				 "%s: unable to free resource sub item: %d.",
+				 function,
+				 resource_sub_item_index );
+
+				goto on_error;
+			}
 		}
 	}
+	resource_sub_item = selected_resource_sub_item;
+	selected_resource_sub_item = NULL;
+
 	if( resource_sub_item == NULL )
 	{
 		if( libwrc_resource_free(
@@ -1039,6 +1078,12 @@ on_error:
 	{
 		libwrc_resource_item_free(
 		 &resource_sub_item,
+		 NULL );
+	}
+	if( selected_resource_sub_item != NULL )
+	{
+		libwrc_resource_item_free(
+		 &selected_resource_sub_item,
 		 NULL );
 	}
 	if( resource_item != NULL )
@@ -1339,6 +1384,7 @@ int resource_file_get_mui_resource(
 	libwrc_mui_resource_t *safe_mui_resource  = NULL;
 	libwrc_resource_t *resource               = NULL;
 	libwrc_resource_item_t *resource_item     = NULL;
+	libwrc_resource_item_t *selected_resource_sub_item = NULL;
 	libwrc_resource_item_t *resource_sub_item = NULL;
 	uint8_t *resource_data                    = NULL;
 	static char *function                     = "resource_file_get_mui_resource";
@@ -1348,6 +1394,8 @@ int resource_file_get_mui_resource(
 	int number_of_resource_items              = 0;
 	int number_of_resource_sub_items          = 0;
 	int resource_sub_item_index               = 0;
+	int best_language_match_score             = -1;
+	int language_match_score                  = 0;
 	int result                                = 0;
 
 	if( resource_file == NULL )
@@ -1472,7 +1520,7 @@ int resource_file_get_mui_resource(
 
 		goto on_error;
 	}
-	preferred_language_identifier = resource_file->preferred_language_identifier & 0x000003ffUL;
+	preferred_language_identifier = resource_file->preferred_language_identifier;
 
 	for( resource_sub_item_index = 0;
 	     resource_sub_item_index < number_of_resource_sub_items;
@@ -1509,26 +1557,61 @@ int resource_file_get_mui_resource(
 
 			goto on_error;
 		}
-		if( ( preferred_language_identifier == 0 )
-		 || ( preferred_language_identifier == ( resource_identifier & 0x000003ffUL ) ) )
+		if( preferred_language_identifier == 0 )
 		{
+			selected_resource_sub_item = resource_sub_item;
+			resource_sub_item          = NULL;
+
 			break;
 		}
-		if( libwrc_resource_item_free(
-		     &resource_sub_item,
-		     error ) != 1 )
-		{
-			libcerror_error_set(
-			 error,
-			 LIBCERROR_ERROR_DOMAIN_RUNTIME,
-			 LIBCERROR_RUNTIME_ERROR_FINALIZE_FAILED,
-			 "%s: unable to free resource sub item: %d.",
-			 function,
-			 resource_sub_item_index );
+		language_match_score = evttools_language_get_match_score(
+		                        preferred_language_identifier,
+		                        resource_identifier );
 
-			goto on_error;
+		if( language_match_score > best_language_match_score )
+		{
+			if( selected_resource_sub_item != NULL )
+			{
+				if( libwrc_resource_item_free(
+				     &selected_resource_sub_item,
+				     error ) != 1 )
+				{
+					libcerror_error_set(
+					 error,
+					 LIBCERROR_ERROR_DOMAIN_RUNTIME,
+					 LIBCERROR_RUNTIME_ERROR_FINALIZE_FAILED,
+					 "%s: unable to free selected resource sub item.",
+					 function );
+
+					goto on_error;
+				}
+			}
+			selected_resource_sub_item = resource_sub_item;
+			resource_sub_item          = NULL;
+
+			best_language_match_score = language_match_score;
+		}
+		if( resource_sub_item != NULL )
+		{
+			if( libwrc_resource_item_free(
+			     &resource_sub_item,
+			     error ) != 1 )
+			{
+				libcerror_error_set(
+				 error,
+				 LIBCERROR_ERROR_DOMAIN_RUNTIME,
+				 LIBCERROR_RUNTIME_ERROR_FINALIZE_FAILED,
+				 "%s: unable to free resource sub item: %d.",
+				 function,
+				 resource_sub_item_index );
+
+				goto on_error;
+			}
 		}
 	}
+	resource_sub_item = selected_resource_sub_item;
+	selected_resource_sub_item = NULL;
+
 	if( resource_sub_item == NULL )
 	{
 		if( libwrc_resource_free(
@@ -1699,6 +1782,12 @@ on_error:
 		 &resource_sub_item,
 		 NULL );
 	}
+	if( selected_resource_sub_item != NULL )
+	{
+		libwrc_resource_item_free(
+		 &selected_resource_sub_item,
+		 NULL );
+	}
 	if( resource_item != NULL )
 	{
 		libwrc_resource_item_free(
@@ -1787,6 +1876,7 @@ int resource_file_get_wevt_manifest(
 	libfwevt_manifest_t *safe_wevt_manifest   = NULL;
 	libwrc_resource_t *resource               = NULL;
 	libwrc_resource_item_t *resource_item     = NULL;
+	libwrc_resource_item_t *selected_resource_sub_item = NULL;
 	libwrc_resource_item_t *resource_sub_item = NULL;
 	uint8_t *resource_data                    = NULL;
 	static char *function                     = "resource_file_get_wevt_manifest";
@@ -1796,6 +1886,8 @@ int resource_file_get_wevt_manifest(
 	int number_of_resource_items              = 0;
 	int number_of_resource_sub_items          = 0;
 	int resource_sub_item_index               = 0;
+	int best_language_match_score             = -1;
+	int language_match_score                  = 0;
 	int result                                = 0;
 
 	if( resource_file == NULL )
@@ -1920,7 +2012,7 @@ int resource_file_get_wevt_manifest(
 
 		goto on_error;
 	}
-	preferred_language_identifier = resource_file->preferred_language_identifier & 0x000003ffUL;
+	preferred_language_identifier = resource_file->preferred_language_identifier;
 
 	for( resource_sub_item_index = 0;
 	     resource_sub_item_index < number_of_resource_sub_items;
@@ -1957,26 +2049,61 @@ int resource_file_get_wevt_manifest(
 
 			goto on_error;
 		}
-		if( ( preferred_language_identifier == 0 )
-		 || ( preferred_language_identifier == ( resource_identifier & 0x000003ffUL ) ) )
+		if( preferred_language_identifier == 0 )
 		{
+			selected_resource_sub_item = resource_sub_item;
+			resource_sub_item          = NULL;
+
 			break;
 		}
-		if( libwrc_resource_item_free(
-		     &resource_sub_item,
-		     error ) != 1 )
-		{
-			libcerror_error_set(
-			 error,
-			 LIBCERROR_ERROR_DOMAIN_RUNTIME,
-			 LIBCERROR_RUNTIME_ERROR_FINALIZE_FAILED,
-			 "%s: unable to free resource sub item: %d.",
-			 function,
-			 resource_sub_item_index );
+		language_match_score = evttools_language_get_match_score(
+		                        preferred_language_identifier,
+		                        resource_identifier );
 
-			goto on_error;
+		if( language_match_score > best_language_match_score )
+		{
+			if( selected_resource_sub_item != NULL )
+			{
+				if( libwrc_resource_item_free(
+				     &selected_resource_sub_item,
+				     error ) != 1 )
+				{
+					libcerror_error_set(
+					 error,
+					 LIBCERROR_ERROR_DOMAIN_RUNTIME,
+					 LIBCERROR_RUNTIME_ERROR_FINALIZE_FAILED,
+					 "%s: unable to free selected resource sub item.",
+					 function );
+
+					goto on_error;
+				}
+			}
+			selected_resource_sub_item = resource_sub_item;
+			resource_sub_item          = NULL;
+
+			best_language_match_score = language_match_score;
+		}
+		if( resource_sub_item != NULL )
+		{
+			if( libwrc_resource_item_free(
+			     &resource_sub_item,
+			     error ) != 1 )
+			{
+				libcerror_error_set(
+				 error,
+				 LIBCERROR_ERROR_DOMAIN_RUNTIME,
+				 LIBCERROR_RUNTIME_ERROR_FINALIZE_FAILED,
+				 "%s: unable to free resource sub item: %d.",
+				 function,
+				 resource_sub_item_index );
+
+				goto on_error;
+			}
 		}
 	}
+	resource_sub_item = selected_resource_sub_item;
+	selected_resource_sub_item = NULL;
+
 	if( resource_sub_item == NULL )
 	{
 		if( libwrc_resource_free(
@@ -2145,6 +2272,12 @@ on_error:
 	{
 		libwrc_resource_item_free(
 		 &resource_sub_item,
+		 NULL );
+	}
+	if( selected_resource_sub_item != NULL )
+	{
+		libwrc_resource_item_free(
+		 &selected_resource_sub_item,
 		 NULL );
 	}
 	if( resource_item != NULL )
